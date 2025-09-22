@@ -1,10 +1,14 @@
-import { BrowserRouter, Link } from "react-router-dom";
-import { AuthProvider } from "./context/AuthContext";
-import AppRoutes from "./routes/AppRoutes";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import Login from "./pages/Login";
+// Sahifa componentlari (simple placeholder)
+import Register from "./pages/Register"
+import Profile from "./pages/Profile"
+import StudentDashboard from "./pages/student/StudentDashboard";
+import TeacherDashboard from "./pages/teacher/TeacherDashboard";
+import AdminDashboard from "./pages/admin/AdminDashboard"
 
-export default function App() {
+function App() {
   return (
-    <AuthProvider>
       <BrowserRouter>
         {/* Navbar */}
         <nav className="flex gap-4 p-4 bg-gray-200">
@@ -17,8 +21,15 @@ export default function App() {
         </nav>
 
         {/* Routes */}
-        <AppRoutes />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/student/dashboard" element={<StudentDashboard />} />
+          <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        </Routes>
       </BrowserRouter>
-    </AuthProvider>
   );
 }
+export default App;

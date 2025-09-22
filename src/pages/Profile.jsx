@@ -1,21 +1,28 @@
-import { useAuth } from "../context/AuthContext";
+import React, { useEffect, useState } from "react";
 
-export default function Profile() {
-  const { user, handleLogout } = useAuth();
+function Profile() {
+  const [user, setUser] = useState(null);
 
-  if (!user) return <p className="mt-20 text-center">You are not logged in</p>;
+  useEffect(() => {
+    // localStorage dan userni olish
+    const savedUser = localStorage.getItem("user");
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  if (!user) {
+    return <div>Hech qanday ma’lumot topilmadi. Iltimos, login qiling.</div>;
+  }
 
   return (
-    <div className="flex flex-col items-center mt-20">
-      <h1 className="text-2xl font-bold">Profile</h1>
-      <p className="mt-2">👤 {user.name}</p>
-      <p>📧 {user.email}</p>
-      <button
-        onClick={handleLogout}
-        className="p-2 mt-4 text-white bg-red-500 rounded"
-      >
-        Logout
-      </button>
+    <div className="max-w-md p-4 mx-auto space-y-4 bg-white shadow-md rounded-xl">
+      <h2 className="text-xl font-bold text-gray-800">Profil Ma’lumotlari</h2>
+      <p><strong>Ism:</strong> {user.name}</p>
+      <p><strong>Email:</strong> {user.email}</p>
+      <p><strong>Rol:</strong> {user.role}</p>
     </div>
   );
 }
+
+export default Profile;

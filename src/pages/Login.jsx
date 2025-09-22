@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,31 +18,29 @@ const Login = () => {
       });
 
       const data = await res.json();
-
+  console.log(data.user);
+   
       if (res.ok) {
-        // Tokenlarni va user ma’lumotlarini saqlash
+        // Token va rolni saqlash
         localStorage.setItem("accessToken", data.accessToken);
-        localStorage.setItem("refreshToken", data.refreshToken);
-        localStorage.setItem("user", JSON.stringify(data.user));
-
-        setMessage("Login muvaffaqiyatli!");
-
+        localStorage.setItem("role", data.user.role);
+ localStorage.setItem("user", JSON.stringify(data.user));
         // Rolga qarab yo‘naltirish
-        const role = data.user.role;
-        if (role === "student") {
-          window.location.href = "/student/dashboard";
-        } else if (role === "teacher") {
-          window.location.href = "/teacher/dashboard";
-        } else if (role === "admin") {
-          window.location.href = "/admin/dashboard";
+        if (data.user.role === "student") {
+          navigate("/student/dashboard");
+        } else if (data.user.role === "teacher") {
+          navigate("/teacher/dashboard");
+        } else if (data.user.role === "admin") {
+          navigate("/admin/dashboard");
         } else {
-          window.location.href = "/"; // fallback
+          navigate("/"); // fallback
         }
       } else {
         setMessage(data.message || "Login xatosi");
       }
     } catch (err) {
-      setMessage("Server xatosi");
+      console.error(err);
+      setMessage("Server bilan ulanishda xatolik");
     }
   };
 
