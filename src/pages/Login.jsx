@@ -18,13 +18,13 @@ const Login = () => {
       });
 
       const data = await res.json();
-  console.log(data.user);
-   
+      console.log(data.user);
+
       if (res.ok) {
         // Token va rolni saqlash
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("role", data.user.role);
- localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("user", JSON.stringify(data.user));
         // Rolga qarab yo‘naltirish
         if (data.user.role === "student") {
           navigate("/student/dashboard");
