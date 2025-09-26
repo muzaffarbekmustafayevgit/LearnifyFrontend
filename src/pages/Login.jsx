@@ -7,42 +7,57 @@ const Login = () => {
   const [message, setMessage] = useState("");
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+// Login.jsx - handleSubmit funksiyasini shunday o'zgartiring
+const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+  try {
+    const res = await fetch("http://localhost:5000/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
 
-      const data = await res.json();
-      console.log(data.user);
+    const data = await res.json();
+    console.log("Server response:", data); // Responseni to'liq ko'rish
 
-      if (res.ok) {
-        // Token va rolni saqlash
-        localStorage.setItem("accessToken", data.accessToken);
-        localStorage.setItem("role", data.user.role);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        // Rolga qarab yo‘naltirish
-        if (data.user.role === "student") {
-          navigate("/student/dashboard");
-        } else if (data.user.role === "teacher") {
-          navigate("/teacher/dashboard");
-        } else if (data.user.role === "admin") {
-          navigate("/admin/dashboard");
-        } else {
-          navigate("/"); // fallback
-        }
-      } else {
-        setMessage(data.message || "Login xatosi");
+    if (res.ok && data.success) {
+      // ✅ XATOLIKNI OLDINI OLISH: data strukturasini tekshirish
+      if (!data.data || !data.data.user) {
+        throw new Error("Serverdan noto'g'ri ma'lumot qaytdi");
       }
-    } catch (err) {
-      console.error(err);
-      setMessage("Server bilan ulanishda xatolik");
+
+      const { user, accessToken, refreshToken } = data.data;
+
+      // ✅ XATOLIKNI OLDINI OLISH: user va role mavjudligini tekshirish
+      if (!user || !user.role) {
+        throw new Error("Foydalanuvchi ma'lumotlari to'liq emas");
+      }
+
+      // Token va rolni saqlash
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("refreshToken", refreshToken);
+      localStorage.setItem("role", user.role);
+      localStorage.setItem("user", JSON.stringify(user));
+      
+      // Rolga qarab yo'naltirish
+      if (user.role === "student") {
+        navigate("/student/dashboard");
+      } else if (user.role === "teacher") {
+        navigate("/teacher/dashboard");
+      } else if (user.role === "admin") {
+        navigate("/admin/dashboard");
+      } else {
+        navigate("/"); // fallback
+      }
+    } else {
+      setMessage(data.message || "Login xatosi");
     }
-  };
+  } catch (err) {
+    console.error("Login error:", err);
+    setMessage(err.message || "Server bilan ulanishda xatolik");
+  }
+};
 
   return (
     <div className="max-w-md p-6 mx-auto mt-10 bg-white shadow-lg rounded-xl">
