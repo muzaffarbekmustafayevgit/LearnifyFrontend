@@ -1,452 +1,194 @@
-import React, { useEffect, useState } from 'react';
+// src/pages/admin/ManageUsers.jsx
+import React, { useEffect, useState } from "react";
 
-const API_URL = 'http://localhost:5000/api/users';
-
-const ManageUsers = () => {
+export default function ManageUsers() {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "student" });
   const [editingUser, setEditingUser] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: 'student',
-    isActive: true
-  });
+  const [loading, setLoading] = useState(false);
+  const token = localStorage.getItem("accessToken"); // login qilganda saqlangan token
 
+  // 🔹 Barcha userlarni olish
   const fetchUsers = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError('');
-      
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setError('Token topilmadi. Iltimos, tizimga kiring.');
-        setLoading(false);
-        return;
-      }
-
-      const res = await fetch(API_URL, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
+      const res = await fetch("http://localhost:5000/api/users/admin/users", {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          setError('Kirish rad etildi. Token yaroqsiz yoki muddati tugagan.');
-        } else if (res.status === 403) {
-          setError('Sizda admin huquqi yoʻq.');
-        } else {
-          throw new Error(`Server xatosi: ${res.status}`);
-        }
-        setLoading(false);
-        return;
-      }
-
       const data = await res.json();
-      setUsers(data);
+      setUsers(data.users || []);
     } catch (err) {
-      console.error('Xatolik:', err);
-      setError('Foydalanuvchilarni yuklashda xatolik: ' + err.message);
-    } finally {
-      setLoading(false);
+      console.error("Foydalanuvchilarni olishda xato:", err);
     }
-  };
-
-  const deleteUser = async (id) => {
-    if (!window.confirm('Haqiqatan ham o‘chirmoqchimisiz?')) return;
-    
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/${id}`, {
-        method: 'DELETE',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Oʻchirishda xatolik');
-      }
-
-      const data = await res.json();
-      alert(data.message);
-      fetchUsers();
-    } catch (err) {
-      console.error('Oʻchirish xatosi:', err);
-      alert('Xatolik: ' + err.message);
-    }
-  };
-
-  const openEditModal = (user) => {
-    setEditingUser(user);
-    setFormData({
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isActive: user.isActive
-    });
-    setShowEditModal(true);
-  };
-
-  const closeEditModal = () => {
-    setShowEditModal(false);
-    setEditingUser(null);
-    setFormData({
-      name: '',
-      email: '',
-      role: 'student',
-      isActive: true
-    });
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const updateUser = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/${editingUser._id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Yangilashda xatolik');
-      }
-
-      const data = await res.json();
-      alert(data.message);
-      closeEditModal();
-      fetchUsers();
-    } catch (err) {
-      console.error('Yangilash xatosi:', err);
-      alert('Xatolik: ' + err.message);
-    }
-  };
-
-  const toggleUserStatus = async (user) => {
-    const newStatus = !user.isActive;
-    const confirmMessage = newStatus 
-      ? `Haqiqatan ham ${user.name} foydalanuvchisini faollashtirmoqchimisiz?`
-      : `Haqiqatan ham ${user.name} foydalanuvchisini bloklamoqchimisiz?`;
-    
-    if (!window.confirm(confirmMessage)) return;
-
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/${user._id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          ...user,
-          isActive: newStatus
-        })
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Statusni o‘zgartirishda xatolik');
-      }
-
-      const data = await res.json();
-      alert(data.message);
-      fetchUsers();
-    } catch (err) {
-      console.error('Statusni o‘zgartirish xatosi:', err);
-      alert('Xatolik: ' + err.message);
-    }
+    setLoading(false);
   };
 
   useEffect(() => {
     fetchUsers();
   }, []);
 
-  if (loading) return (
-    <div style={{ padding: '20px', textAlign: 'center' }}>
-      <p>Yuklanmoqda...</p>
-    </div>
-  );
+  // 🔹 Form inputlarini boshqarish
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-  if (error) {
-    return (
-      <div style={{ padding: '20px' }}>
-        <h2>Foydalanuvchilar roʻyxati</h2>
-        <div style={{ 
-          color: 'red', 
-          padding: '15px', 
-          border: '1px solid red', 
-          borderRadius: '5px',
-          backgroundColor: '#ffe6e6',
-          marginBottom: '20px'
-        }}>
-          {error}
-        </div>
-        <button 
-          onClick={fetchUsers}
-          style={{
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '5px',
-            cursor: 'pointer'
-          }}
-        >
-          Qayta urinish
-        </button>
-      </div>
-    );
-  }
+  // 🔹 Yangi user yaratish yoki mavjudini yangilash
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const url = editingUser
+        ? `http://localhost:5000/api/users/admin/users/${editingUser._id}`
+        : "http://localhost:5000/api/users/admin/users";
+
+      const method = editingUser ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+      console.log("Natija:", data);
+
+      setForm({ name: "", email: "", password: "", role: "student" });
+      setEditingUser(null);
+      fetchUsers();
+    } catch (err) {
+      console.error("Xatolik:", err);
+    }
+  };
+
+  // 🔹 Userni tahrirlash
+  const handleEdit = (user) => {
+    setForm({
+      name: user.name,
+      email: user.email,
+      password: "",
+      role: user.role,
+    });
+    setEditingUser(user);
+  };
+
+  // 🔹 Userni o‘chirish
+  const handleDelete = async (id) => {
+    if (!window.confirm("Foydalanuvchini o‘chirishni xohlaysizmi?")) return;
+
+    try {
+      await fetch(`http://localhost:5000/api/users/admin/users/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchUsers();
+    } catch (err) {
+      console.error("O‘chirishda xato:", err);
+    }
+  };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>Foydalanuvchilar boshqaruvi</h2>
-        <span style={{ color: '#666' }}>Jami: {users.length} ta foydalanuvchi</span>
-      </div>
-      
-      {users.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
-          <p style={{ fontSize: '18px', color: '#666' }}>Foydalanuvchilar topilmadi</p>
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ 
-            width: '100%', 
-            borderCollapse: 'collapse',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-          }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8f9fa' }}>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Ism</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Email</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Role</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>Status</th>
-                <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #dee2e6' }}>Harakatlar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(user => (
-                <tr key={user._id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={{ padding: '12px' }}>{user.name}</td>
-                  <td style={{ padding: '12px' }}>{user.email}</td>
-                  <td style={{ padding: '12px' }}>
-                    <span style={{
-                      padding: '4px 12px',
-                      borderRadius: '15px',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      backgroundColor: 
-                        user.role === 'admin' ? '#dc3545' : 
-                        user.role === 'teacher' ? '#28a745' : '#007bff',
-                      color: 'white'
-                    }}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px' }}>
-                    <span 
-                      onClick={() => toggleUserStatus(user)}
-                      style={{
-                        padding: '4px 12px',
-                        borderRadius: '15px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        backgroundColor: user.isActive ? '#28a745' : '#6c757d',
-                        color: 'white',
-                        cursor: 'pointer',
-                        display: 'inline-block'
-                      }}
-                    >
-                      {user.isActive ? 'Faol' : 'Nofaol'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <button 
-                      onClick={() => openEditModal(user)}
-                      style={{
-                        backgroundColor: '#17a2b8',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        marginRight: '5px',
-                        fontSize: '12px'
-                      }}
-                    >
-                      Tahrirlash
-                    </button>
-                    <button 
-                      onClick={() => deleteUser(user._id)}
-                      style={{
-                        backgroundColor: '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      O‘chirish
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div className="p-6">
+      <h1 className="mb-4 text-xl font-bold">👨‍💼 Manage Users</h1>
 
-      {/* Edit Modal */}
-      {showEditModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '30px',
-            borderRadius: '8px',
-            width: '90%',
-            maxWidth: '500px',
-            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-          }}>
-            <h3 style={{ marginBottom: '20px' }}>Foydalanuvchini tahrirlash</h3>
-            <form onSubmit={updateUser}>
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Ism:</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
-              </div>
-              
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Email:</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
-              </div>
-              
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Role:</label>
-                <select
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <input
-                    type="checkbox"
-                    name="isActive"
-                    checked={formData.isActive}
-                    onChange={handleInputChange}
-                  />
-                  <span style={{ fontWeight: 'bold' }}>Faol foydalanuvchi</span>
-                </label>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  style={{
-                    padding: '10px 20px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    backgroundColor: '#f8f9fa',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: '10px 20px',
-                    border: 'none',
-                    borderRadius: '4px',
-                    backgroundColor: '#007bff',
-                    color: 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Saqlash
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* 🔹 User form */}
+      <form onSubmit={handleSubmit} className="mb-6 space-y-2">
+        <input
+          type="text"
+          name="name"
+          placeholder="Ism"
+          value={form.name}
+          onChange={handleChange}
+          className="w-full p-2 border"
+          required
+        />
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          value={form.email}
+          onChange={handleChange}
+          className="w-full p-2 border"
+          required
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Parol"
+          value={form.password}
+          onChange={handleChange}
+          className="w-full p-2 border"
+          required={!editingUser}
+        />
+        <select
+          name="role"
+          value={form.role}
+          onChange={handleChange}
+          className="w-full p-2 border"
+        >
+          <option value="student">Student</option>
+          <option value="teacher">Teacher</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button
+          type="submit"
+          className="px-4 py-2 text-white bg-blue-600 rounded"
+        >
+          {editingUser ? "Yangilash" : "Qo‘shish"}
+        </button>
+        {editingUser && (
+          <button
+            type="button"
+            onClick={() => {
+              setEditingUser(null);
+              setForm({ name: "", email: "", password: "", role: "student" });
+            }}
+            className="px-4 py-2 ml-2 text-white bg-gray-500 rounded"
+          >
+            Bekor qilish
+          </button>
+        )}
+      </form>
+
+      {/* 🔹 Users list */}
+      {loading ? (
+        <p>⏳ Yuklanmoqda...</p>
+      ) : (
+        <table className="w-full border">
+          <thead>
+            <tr className="bg-gray-200">
+              <th className="px-2 py-1 border">Ism</th>
+              <th className="px-2 py-1 border">Email</th>
+              <th className="px-2 py-1 border">Role</th>
+              <th className="px-2 py-1 border">Amallar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u._id}>
+                <td className="px-2 py-1 border">{u.name}</td>
+                <td className="px-2 py-1 border">{u.email}</td>
+                <td className="px-2 py-1 border">{u.role}</td>
+                <td className="px-2 py-1 space-x-2 border">
+                  <button
+                    onClick={() => handleEdit(u)}
+                    className="px-2 py-1 text-white bg-yellow-500 rounded"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(u._id)}
+                    className="px-2 py-1 text-white bg-red-600 rounded"
+                  >
+                    🗑️ Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );
-};
-
-export default ManageUsers;
+}

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const Activate = () => {
+const ActivateAccount = () => {
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
 
@@ -56,4 +56,4 @@ const Activate = () => {
   );
 };
 
-export default Activate;
+export default ActivateAccount;
