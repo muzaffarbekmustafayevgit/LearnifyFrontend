@@ -47,7 +47,7 @@ export default function App() {
   return (
     <Router>
       {/* Navbar har doim ko‘rinadi */}
-      <Navbar />
+
 
       <Routes>
         {/* Shared routes */}
@@ -56,8 +56,9 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/register" element={<Register />} />
         <Route path="/activate" element={<ActivateAccount />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<Login />} />
         <Route path="/logout" element={<Logout />} />
+        <Route path="/*" element={<NotFound />} />
 
         {/* Admin routes */}
         {role === "admin" && (
@@ -79,11 +80,11 @@ export default function App() {
           <>
             <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
             <Route path="/teacher/courses" element={<CourseList />} />
-            <Route path="/teacher/courses/:id" element={<EditCourse />} />
             <Route path="/teacher/modules" element={<ModuleManager />} />
             <Route path="/teacher/lessons" element={<LessonManager />} />
             <Route path="/teacher/progress/:courseId" element={<StudentProgress />} />
             <Route path="/teacher/create-course" element={<CreateCourse />} />
+            <Route path="/teacher/courses/:id/edit" element={<EditCourse />} />
           </>
         )}
 

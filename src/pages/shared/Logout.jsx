@@ -12,7 +12,7 @@ const Logout = () => {
     localStorage.removeItem("user");
 
     // 🔄 Login sahifaga qaytarish
-    navigate("/login");
+    navigate("/");
   }, [navigate]);
 
   return (

@@ -17,9 +17,9 @@ export default function AdminDashboard() {
         </Link>
 
         {/* Statistics */}
-        <Link to="/admin/statistics" className="p-4 bg-yellow-100 shadow rounded-xl hover:bg-yellow-200">
+        {/* <Link to="/admin/statistics" className="p-4 bg-yellow-100 shadow rounded-xl hover:bg-yellow-200">
           📊 Statistics
-        </Link>
+        </Link> */}
       </div>
     </div>
   );
