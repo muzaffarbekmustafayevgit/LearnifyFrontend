@@ -17,16 +17,20 @@ export default function EditCourse() {
   const [activeTab, setActiveTab] = useState("basic");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+
   // Yangi module/lesson formlari
-  const [newModule, setNewModule] = useState({ title: "", description: "", order: 0 });
-  const [newLesson, setNewLesson] = useState({ 
-    title: "", 
-    content: "", 
-    type: "video", 
-    duration: 0, 
+  const [newModule, setNewModule] = useState({
+    title: "",
+    description: "",
     order: 0,
-    moduleId: "" 
+  });
+  const [newLesson, setNewLesson] = useState({
+    title: "",
+    content: "",
+    type: "text", // ✅ Modeldagi enumga mos: 'text' yoki 'material'
+    duration: 0,
+    order: 0,
+    moduleId: "",
   });
 
   const token = localStorage.getItem("accessToken");
@@ -36,31 +40,49 @@ export default function EditCourse() {
   useEffect(() => {
     const fetchCourseData = async () => {
       try {
-        const res = await fetch(`${API_URL}/courses/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        setLoading(true);
+        const [courseRes, modulesRes, lessonsRes] = await Promise.all([
+          fetch(`${API_URL}/courses/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/modules/course/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/lessons/course/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-        const data = await res.json();
-        if (res.ok && data.success && data.data && data.data.course) {
-          const c = data.data.course;
+        // Kurs ma'lumotlari
+        const courseData = await courseRes.json();
+        if (courseRes.ok && courseData.data?.course) {
+          const c = courseData.data.course;
           setCourse({
             title: c.title || "",
             description: c.description || "",
-            price: c.price?.amount || 0,
+            price: c.price?.amount || c.price || 0,
             level: c.level || "beginner",
             category: c.category || "",
           });
-
-          // Modullarni olish
-          await fetchModules();
-          // Darslarni olish
-          await fetchLessons();
         } else {
           alert("⚠️ Kurs topilmadi yoki sizda huquq yo'q");
           navigate("/teacher/courses");
+          return;
+        }
+
+        // Modullar
+        const modulesData = await modulesRes.json();
+        if (modulesData.success) {
+          setModules(modulesData.data?.modules || modulesData.modules || []);
+        }
+
+        // Darslar
+        const lessonsData = await lessonsRes.json();
+        if (lessonsData.success) {
+          setLessons(lessonsData.data?.lessons || lessonsData.lessons || []);
         }
       } catch (err) {
-        console.error("Kursni olishda xatolik:", err);
+        console.error("Ma'lumotlarni olishda xatolik:", err);
         alert("Server bilan aloqa yo'q");
       } finally {
         setLoading(false);
@@ -68,37 +90,7 @@ export default function EditCourse() {
     };
 
     fetchCourseData();
-  }, [id, navigate]);
-
-  // 📚 Modullarni olish
-  const fetchModules = async () => {
-    try {
-      const res = await fetch(`${API_URL}/modules/course/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setModules(data.data.modules || []);
-      }
-    } catch (error) {
-      console.error("Modullarni olishda xatolik:", error);
-    }
-  };
-
-  // 📖 Darslarni olish
-  const fetchLessons = async () => {
-    try {
-      const res = await fetch(`${API_URL}/lessons/course/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setLessons(data.data.lessons || []);
-      }
-    } catch (error) {
-      console.error("Darslarni olishda xatolik:", error);
-    }
-  };
+  }, [id, navigate, token]);
 
   // ➕ Yangi module qo'shish
   const handleAddModule = async (e) => {
@@ -111,19 +103,28 @@ export default function EditCourse() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          ...newModule,
+          title: newModule.title,
+          description: newModule.description,
           courseId: id,
-          order: modules.length + 1
+          order: newModule.order || modules.length + 1,
         }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (res.ok) {
         alert("✅ Modul qo'shildi!");
         setNewModule({ title: "", description: "", order: 0 });
-        fetchModules();
+
+        // Yangi modullarni yuklash
+        const modulesRes = await fetch(`${API_URL}/modules/course/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const modulesData = await modulesRes.json();
+        if (modulesData.success) {
+          setModules(modulesData.data?.modules || modulesData.modules || []);
+        }
       } else {
-        alert("❌ Xatolik: " + data.message);
+        alert("❌ Xatolik: " + (data.message || "Modul qo'shishda xatolik"));
       }
     } catch (error) {
       console.error("Modul qo'shishda xatolik:", error);
@@ -132,6 +133,8 @@ export default function EditCourse() {
   };
 
   // ➕ Yangi dars qo'shish
+  // ➕ Yangi dars qo'shish
+  // ➕ Yangi dars qo'shish
   const handleAddLesson = async (e) => {
     e.preventDefault();
     if (!newLesson.moduleId) {
@@ -139,42 +142,71 @@ export default function EditCourse() {
       return;
     }
 
+    // ✅ Type maydoni majburiyligini tekshiramiz
+    if (!newLesson.type) {
+      alert("Iltimos, dars turini tanlang!");
+      return;
+    }
+
     try {
+      const lessonData = {
+        title: newLesson.title,
+        content: newLesson.content,
+        type: newLesson.type, // ✅ Majburiy
+        duration: newLesson.duration,
+        courseId: id,
+        moduleId: newLesson.moduleId,
+        order:
+          newLesson.order ||
+          lessons.filter(
+            (l) =>
+              l.module === newLesson.moduleId ||
+              l.moduleId === newLesson.moduleId
+          ).length + 1,
+      };
+
+      console.log("Yuborilayotgan lesson ma'lumotlari:", lessonData);
+
       const res = await fetch(`${API_URL}/lessons`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          ...newLesson,
-          courseId: id,
-          order: lessons.filter(l => l.moduleId === newLesson.moduleId).length + 1
-        }),
+        body: JSON.stringify(lessonData),
       });
 
       const data = await res.json();
-      if (data.success) {
+      console.log("Server javobi:", data);
+
+      if (res.ok && data.success) {
         alert("✅ Dars qo'shildi!");
-        setNewLesson({ 
-          title: "", 
-          content: "", 
-          type: "video", 
-          duration: 0, 
+        setNewLesson({
+          title: "",
+          content: "",
+          type: "video",
+          duration: 0,
           order: 0,
-          moduleId: "" 
+          moduleId: "",
         });
-        fetchLessons();
+
+        // Yangi darslarni yuklash
+        const lessonsRes = await fetch(`${API_URL}/lessons/course/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lessonsData = await lessonsRes.json();
+        if (lessonsData.success) {
+          setLessons(lessonsData.data?.lessons || lessonsData.lessons || []);
+        }
       } else {
-        alert("❌ Xatolik: " + data.message);
+        alert("❌ Xatolik: " + (data.message || "Dars qo'shishda xatolik"));
       }
     } catch (error) {
       console.error("Dars qo'shishda xatolik:", error);
       alert("Server bilan aloqa xatosi!");
     }
   };
-
-  // 📝 Kursni yangilash (sizning mavjud funksiyangiz)
+  // 📝 Kursni yangilash
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -187,7 +219,10 @@ export default function EditCourse() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          ...course,
+          title: course.title,
+          description: course.description,
+          category: course.category,
+          level: course.level,
           price: {
             amount: Number(course.price),
             currency: "USD",
@@ -198,10 +233,12 @@ export default function EditCourse() {
 
       const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (res.ok) {
         alert("✅ Kurs muvaffaqiyatli yangilandi!");
       } else {
-        alert(`❌ Xatolik: ${data.message || "Kursni yangilashda muammo yuz berdi"}`);
+        alert(
+          `❌ Xatolik: ${data.message || "Kursni yangilashda muammo yuz berdi"}`
+        );
       }
     } catch (err) {
       console.error("Update error:", err);
@@ -211,50 +248,152 @@ export default function EditCourse() {
     }
   };
 
+  // ✏️ Modulni yangilash
+  const handleUpdateModule = async (moduleId, field, value) => {
+    try {
+      const moduleToUpdate = modules.find((m) => m._id === moduleId);
+      if (!moduleToUpdate) return;
+
+      const res = await fetch(`${API_URL}/modules/${moduleId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: field === "title" ? value : moduleToUpdate.title,
+          description:
+            field === "description" ? value : moduleToUpdate.description,
+          order: field === "order" ? value : moduleToUpdate.order,
+        }),
+      });
+
+      if (res.ok) {
+        // Local stateda yangilash
+        const updatedModules = modules.map((module) =>
+          module._id === moduleId ? { ...module, [field]: value } : module
+        );
+        setModules(updatedModules);
+      } else {
+        alert("Modulni yangilashda xatolik");
+      }
+    } catch (error) {
+      console.error("Modul yangilash xatosi:", error);
+      alert("Server bilan aloqa xatosi!");
+    }
+  };
+
+  // ✏️ Darsni yangilash
+  const handleUpdateLesson = async (lessonId, field, value) => {
+    try {
+      const lessonToUpdate = lessons.find((l) => l._id === lessonId);
+      if (!lessonToUpdate) return;
+
+      const res = await fetch(`${API_URL}/lessons/${lessonId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: field === "title" ? value : lessonToUpdate.title,
+          content: field === "content" ? value : lessonToUpdate.content,
+          type: field === "type" ? value : lessonToUpdate.type,
+          duration: field === "duration" ? value : lessonToUpdate.duration,
+          order: field === "order" ? value : lessonToUpdate.order,
+          moduleId:
+            field === "moduleId"
+              ? value
+              : lessonToUpdate.moduleId || lessonToUpdate.module?._id,
+        }),
+      });
+
+      if (res.ok) {
+        // Local stateda yangilash
+        const updatedLessons = lessons.map((lesson) =>
+          lesson._id === lessonId ? { ...lesson, [field]: value } : lesson
+        );
+        setLessons(updatedLessons);
+      } else {
+        alert("Darsni yangilashda xatolik");
+      }
+    } catch (error) {
+      console.error("Dars yangilash xatosi:", error);
+      alert("Server bilan aloqa xatosi!");
+    }
+  };
+
   // 🗑️ Modulni o'chirish
   const handleDeleteModule = async (moduleId) => {
-    if (!window.confirm("Bu modulni o'chirmoqchimisiz?")) return;
-    
+    if (
+      !window.confirm(
+        "Bu modulni o'chirmoqchimisiz? Ichidagi barcha darslar ham o'chadi!"
+      )
+    )
+      return;
+
     try {
       const res = await fetch(`${API_URL}/modules/${moduleId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       const data = await res.json();
-      if (data.success) {
+      if (res.ok) {
         alert("✅ Modul o'chirildi!");
-        fetchModules();
+        // Yangilangan modullarni olish
+        const modulesRes = await fetch(`${API_URL}/modules/course/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const modulesData = await modulesRes.json();
+        if (modulesData.success) {
+          setModules(modulesData.data?.modules || modulesData.modules || []);
+        }
+      } else {
+        alert("❌ Xatolik: " + (data.message || "Modulni o'chirishda xatolik"));
       }
     } catch (error) {
       console.error("Modulni o'chirishda xatolik:", error);
+      alert("Server bilan aloqa xatosi!");
     }
   };
 
   // 🗑️ Darsni o'chirish
   const handleDeleteLesson = async (lessonId) => {
     if (!window.confirm("Bu darsni o'chirmoqchimisiz?")) return;
-    
+
     try {
       const res = await fetch(`${API_URL}/lessons/${lessonId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       const data = await res.json();
-      if (data.success) {
+      if (res.ok) {
         alert("✅ Dars o'chirildi!");
-        fetchLessons();
+        // Yangilangan darslarni olish
+        const lessonsRes = await fetch(`${API_URL}/lessons/course/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lessonsData = await lessonsRes.json();
+        if (lessonsData.success) {
+          setLessons(lessonsData.data?.lessons || lessonsData.lessons || []);
+        }
+      } else {
+        alert("❌ Xatolik: " + (data.message || "Darsni o'chirishda xatolik"));
       }
     } catch (error) {
       console.error("Darsni o'chirishda xatolik:", error);
+      alert("Server bilan aloqa xatosi!");
     }
   };
 
   if (loading) {
     return (
-      <div className="p-6 text-gray-600">
-        ⏳ Kurs ma'lumotlari yuklanmoqda...
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-gray-600 text-lg">
+          ⏳ Kurs ma'lumotlari yuklanmoqda...
+        </div>
       </div>
     );
   }
@@ -264,29 +403,33 @@ export default function EditCourse() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <button 
+          <button
             onClick={() => navigate("/teacher/courses")}
             className="flex items-center text-blue-600 hover:text-blue-700 mb-4"
           >
             ← Orqaga
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">✏️ {course.title}</h1>
-          <p className="text-gray-600">Kursni boshqarish va tarkibini qo'shish</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            ✏️ {course.title}
+          </h1>
+          <p className="text-gray-600">
+            Kursni boshqarish va tarkibini qo'shish
+          </p>
         </div>
 
         {/* Tabs */}
         <div className="bg-white rounded-lg border mb-6">
-          <div className="flex border-b">
+          <div className="flex border-b overflow-x-auto">
             {[
               { id: "basic", label: "Asosiy ma'lumotlar", icon: "📝" },
               { id: "modules", label: "Modullar", icon: "📚" },
               { id: "lessons", label: "Darslar", icon: "📖" },
-              { id: "preview", label: "Ko'rib chiqish", icon: "👁️" }
-            ].map(tab => (
+              { id: "preview", label: "Ko'rib chiqish", icon: "👁️" },
+            ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 py-4 px-6 text-center font-medium border-b-2 transition-colors ${
+                className={`flex-1 min-w-0 py-4 px-4 text-center font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
                     ? "border-blue-500 text-blue-600 bg-blue-50"
                     : "border-transparent text-gray-500 hover:text-gray-700"
@@ -309,10 +452,11 @@ export default function EditCourse() {
                     </label>
                     <input
                       type="text"
-                      name="title"
                       value={course.title}
-                      onChange={(e) => setCourse({...course, title: e.target.value})}
-                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400"
+                      onChange={(e) =>
+                        setCourse({ ...course, title: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       required
                     />
                   </div>
@@ -323,10 +467,11 @@ export default function EditCourse() {
                     </label>
                     <input
                       type="text"
-                      name="category"
                       value={course.category}
-                      onChange={(e) => setCourse({...course, category: e.target.value})}
-                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400"
+                      onChange={(e) =>
+                        setCourse({ ...course, category: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       required
                     />
                   </div>
@@ -337,11 +482,13 @@ export default function EditCourse() {
                     </label>
                     <input
                       type="number"
-                      name="price"
                       value={course.price}
-                      onChange={(e) => setCourse({...course, price: e.target.value})}
-                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400"
+                      onChange={(e) =>
+                        setCourse({ ...course, price: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       min="0"
+                      step="0.01"
                     />
                   </div>
 
@@ -350,10 +497,11 @@ export default function EditCourse() {
                       Daraja
                     </label>
                     <select
-                      name="level"
                       value={course.level}
-                      onChange={(e) => setCourse({...course, level: e.target.value})}
-                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400"
+                      onChange={(e) =>
+                        setCourse({ ...course, level: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                     >
                       <option value="beginner">Boshlang'ich</option>
                       <option value="intermediate">O'rta</option>
@@ -367,11 +515,12 @@ export default function EditCourse() {
                     Tavsif *
                   </label>
                   <textarea
-                    name="description"
                     value={course.description}
-                    onChange={(e) => setCourse({...course, description: e.target.value})}
+                    onChange={(e) =>
+                      setCourse({ ...course, description: e.target.value })
+                    }
                     rows="6"
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400"
+                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                     required
                   />
                 </div>
@@ -385,7 +534,9 @@ export default function EditCourse() {
                       : "bg-green-600 hover:bg-green-700"
                   }`}
                 >
-                  {saving ? "💾 Saqlanmoqda..." : "✅ O'zgarishlarni saqlash"}
+                  {saving
+                    ? "💾 Saqlanmoqda..."
+                    : "✅ Asosiy ma'lumotlarni saqlash"}
                 </button>
               </form>
             )}
@@ -395,35 +546,50 @@ export default function EditCourse() {
               <div className="space-y-6">
                 {/* Yangi modul qo'shish formi */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-semibold mb-3">➕ Yangi Modul Qo'shish</h3>
+                  <h3 className="font-semibold mb-3">
+                    ➕ Yangi Modul Qo'shish
+                  </h3>
                   <form onSubmit={handleAddModule} className="space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <input
                         type="text"
-                        placeholder="Modul nomi"
+                        placeholder="Modul nomi *"
                         value={newModule.title}
-                        onChange={(e) => setNewModule({...newModule, title: e.target.value})}
-                        className="border border-gray-300 rounded-lg p-2"
+                        onChange={(e) =>
+                          setNewModule({ ...newModule, title: e.target.value })
+                        }
+                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                         required
                       />
                       <input
                         type="number"
                         placeholder="Tartib raqami"
                         value={newModule.order}
-                        onChange={(e) => setNewModule({...newModule, order: e.target.value})}
-                        className="border border-gray-300 rounded-lg p-2"
+                        onChange={(e) =>
+                          setNewModule({
+                            ...newModule,
+                            order: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                        min="0"
                       />
                     </div>
                     <textarea
                       placeholder="Modul tavsifi"
                       value={newModule.description}
-                      onChange={(e) => setNewModule({...newModule, description: e.target.value})}
-                      className="w-full border border-gray-300 rounded-lg p-2"
+                      onChange={(e) =>
+                        setNewModule({
+                          ...newModule,
+                          description: e.target.value,
+                        })
+                      }
+                      className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       rows="2"
                     />
                     <button
                       type="submit"
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
                     >
                       ➕ Modul Qo'shish
                     </button>
@@ -432,22 +598,102 @@ export default function EditCourse() {
 
                 {/* Modullar ro'yxati */}
                 <div>
-                  <h3 className="font-semibold mb-3">📚 Modullar ({modules.length})</h3>
+                  <h3 className="font-semibold mb-3">
+                    📚 Modullar ({modules.length})
+                  </h3>
                   {modules.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">Hozircha modullar mavjud emas</p>
+                    <p className="text-gray-500 text-center py-4">
+                      Hozircha modullar mavjud emas
+                    </p>
                   ) : (
                     <div className="space-y-3">
-                      {modules.map(module => (
-                        <div key={module._id} className="border border-gray-200 rounded-lg p-4 bg-white">
+                      {modules.map((module) => (
+                        <div
+                          key={module._id}
+                          className="border border-gray-200 rounded-lg p-4 bg-white"
+                        >
                           <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-semibold">{module.title}</h4>
-                              <p className="text-gray-600 text-sm">{module.description}</p>
-                              <p className="text-xs text-gray-500">Tartib: {module.order}</p>
+                            <div className="flex-1">
+                              <input
+                                type="text"
+                                value={module.title}
+                                onChange={(e) =>
+                                  handleUpdateModule(
+                                    module._id,
+                                    "title",
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={(e) =>
+                                  handleUpdateModule(
+                                    module._id,
+                                    "title",
+                                    e.target.value
+                                  )
+                                }
+                                className="font-semibold text-lg w-full mb-2 p-1 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                              />
+                              <textarea
+                                value={module.description || ""}
+                                onChange={(e) =>
+                                  handleUpdateModule(
+                                    module._id,
+                                    "description",
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={(e) =>
+                                  handleUpdateModule(
+                                    module._id,
+                                    "description",
+                                    e.target.value
+                                  )
+                                }
+                                className="text-gray-600 text-sm w-full mb-2 p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                rows="2"
+                                placeholder="Tavsif qo'shish..."
+                              />
+                              <div className="flex gap-4 text-xs text-gray-500">
+                                <span>
+                                  Tartib:
+                                  <input
+                                    type="number"
+                                    value={module.order || 0}
+                                    onChange={(e) =>
+                                      handleUpdateModule(
+                                        module._id,
+                                        "order",
+                                        parseInt(e.target.value) || 0
+                                      )
+                                    }
+                                    onBlur={(e) =>
+                                      handleUpdateModule(
+                                        module._id,
+                                        "order",
+                                        parseInt(e.target.value) || 0
+                                      )
+                                    }
+                                    className="w-12 ml-1 p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                    min="0"
+                                  />
+                                </span>
+                                <span>
+                                  Darslar:{" "}
+                                  {
+                                    lessons.filter(
+                                      (l) =>
+                                        l.module === module._id ||
+                                        l.moduleId === module._id
+                                    ).length
+                                  }{" "}
+                                  ta
+                                </span>
+                              </div>
                             </div>
                             <button
                               onClick={() => handleDeleteModule(module._id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              className="text-red-600 hover:text-red-800 text-sm ml-4 p-2"
+                              title="Modulni o'chirish"
                             >
                               🗑️
                             </button>
@@ -470,58 +716,95 @@ export default function EditCourse() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <select
                         value={newLesson.moduleId}
-                        onChange={(e) => setNewLesson({...newLesson, moduleId: e.target.value})}
-                        className="border border-gray-300 rounded-lg p-2"
+                        onChange={(e) =>
+                          setNewLesson({
+                            ...newLesson,
+                            moduleId: e.target.value,
+                          })
+                        }
+                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                         required
                       >
-                        <option value="">Modulni tanlang</option>
-                        {modules.map(module => (
+                        <option value="">Modulni tanlang *</option>
+                        {modules.map((module) => (
                           <option key={module._id} value={module._id}>
                             {module.title}
                           </option>
                         ))}
                       </select>
-                      
+
                       <select
                         value={newLesson.type}
-                        onChange={(e) => setNewLesson({...newLesson, type: e.target.value})}
-                        className="border border-gray-300 rounded-lg p-2"
+                        onChange={(e) =>
+                          setNewLesson({ ...newLesson, type: e.target.value })
+                        }
+                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                        required
                       >
+                        <option value="text">Matnli dars</option>
                         <option value="video">Video</option>
-                        <option value="article">Maqola</option>
-                        <option value="quiz">Test</option>
+                        <option value="material">Material</option>
+                        <option value="quiz">Test/Quiz</option>
+                        <option value="assignment">Topshiriq</option>
+                        <option value="live">Live session</option>
                       </select>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <input
                         type="text"
-                        placeholder="Dars nomi"
+                        placeholder="Dars nomi *"
                         value={newLesson.title}
-                        onChange={(e) => setNewLesson({...newLesson, title: e.target.value})}
-                        className="border border-gray-300 rounded-lg p-2"
+                        onChange={(e) =>
+                          setNewLesson({ ...newLesson, title: e.target.value })
+                        }
+                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                         required
                       />
                       <input
                         type="number"
                         placeholder="Davomiylik (daqiqa)"
                         value={newLesson.duration}
-                        onChange={(e) => setNewLesson({...newLesson, duration: e.target.value})}
-                        className="border border-gray-300 rounded-lg p-2"
+                        onChange={(e) =>
+                          setNewLesson({
+                            ...newLesson,
+                            duration: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                        min="0"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        type="number"
+                        placeholder="Tartib raqami"
+                        value={newLesson.order}
+                        onChange={(e) =>
+                          setNewLesson({
+                            ...newLesson,
+                            order: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        className="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                        min="0"
                       />
                     </div>
 
                     <textarea
                       placeholder="Dars mazmuni"
                       value={newLesson.content}
-                      onChange={(e) => setNewLesson({...newLesson, content: e.target.value})}
-                      className="w-full border border-gray-300 rounded-lg p-2"
+                      onChange={(e) =>
+                        setNewLesson({ ...newLesson, content: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       rows="3"
                     />
 
                     <button
                       type="submit"
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
                     >
                       ➕ Dars Qo'shish
                     </button>
@@ -530,33 +813,183 @@ export default function EditCourse() {
 
                 {/* Darslar ro'yxati */}
                 <div>
-                  <h3 className="font-semibold mb-3">📖 Darslar ({lessons.length})</h3>
+                  <h3 className="font-semibold mb-3">
+                    📖 Darslar ({lessons.length})
+                  </h3>
                   {lessons.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">Hozircha darslar mavjud emas</p>
+                    <p className="text-gray-500 text-center py-4">
+                      Hozircha darslar mavjud emas
+                    </p>
                   ) : (
                     <div className="space-y-3">
-                      {lessons.map(lesson => {
-                        const module = modules.find(m => m._id === lesson.moduleId);
+                      {lessons.map((lesson) => {
+                        const module = modules.find(
+                          (m) =>
+                            m._id === (lesson.moduleId || lesson.module?._id)
+                        );
                         return (
-                          <div key={lesson._id} className="border border-gray-200 rounded-lg p-4 bg-white">
+                          <div
+                            key={lesson._id}
+                            className="border border-gray-200 rounded-lg p-4 bg-white"
+                          >
                             <div className="flex justify-between items-start">
-                              <div>
-                                <h4 className="font-semibold">{lesson.title}</h4>
-                                <p className="text-gray-600 text-sm">{lesson.content}</p>
-                                <div className="flex gap-4 text-xs text-gray-500 mt-1">
-                                  <span>Modul: {module?.title || "Noma'lum"}</span>
-                                  <span>Turi: {lesson.type}</span>
-                                  <span>Davomiylik: {lesson.duration} daq</span>
-                                  <span>Tartib: {lesson.order}</span>
+                              <div className="flex-1">
+                                <input
+                                  type="text"
+                                  value={lesson.title}
+                                  onChange={(e) =>
+                                    handleUpdateLesson(
+                                      lesson._id,
+                                      "title",
+                                      e.target.value
+                                    )
+                                  }
+                                  onBlur={(e) =>
+                                    handleUpdateLesson(
+                                      lesson._id,
+                                      "title",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="font-semibold text-lg w-full mb-2 p-1 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                />
+                                <textarea
+                                  value={lesson.content || ""}
+                                  onChange={(e) =>
+                                    handleUpdateLesson(
+                                      lesson._id,
+                                      "content",
+                                      e.target.value
+                                    )
+                                  }
+                                  onBlur={(e) =>
+                                    handleUpdateLesson(
+                                      lesson._id,
+                                      "content",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="text-gray-600 text-sm w-full mb-2 p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                  rows="2"
+                                  placeholder="Mazmun qo'shish..."
+                                />
+                                <div className="flex gap-4 text-xs text-gray-500 mt-1 flex-wrap">
+                                  <span>
+                                    Modul:
+                                    <select
+                                      value={
+                                        lesson.moduleId || lesson.module?._id
+                                      }
+                                      onChange={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "moduleId",
+                                          e.target.value
+                                        )
+                                      }
+                                      onBlur={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "moduleId",
+                                          e.target.value
+                                        )
+                                      }
+                                      className="ml-1 p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                    >
+                                      {modules.map((mod) => (
+                                        <option key={mod._id} value={mod._id}>
+                                          {mod.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </span>
+                                  <span>
+                                    Turi:
+                                    <select
+                                      value={lesson.type}
+                                      onChange={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "type",
+                                          e.target.value
+                                        )
+                                      }
+                                      onBlur={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "type",
+                                          e.target.value
+                                        )
+                                      }
+                                      className="ml-1 p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                    >
+                                      <option value="video">Video</option>
+                                      <option value="article">Maqola</option>
+                                      <option value="quiz">Test</option>
+                                    </select>
+                                  </span>
+                                  <span>
+                                    Davomiylik:
+                                    <input
+                                      type="number"
+                                      value={lesson.duration || 0}
+                                      onChange={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "duration",
+                                          parseInt(e.target.value) || 0
+                                        )
+                                      }
+                                      onBlur={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "duration",
+                                          parseInt(e.target.value) || 0
+                                        )
+                                      }
+                                      className="w-16 ml-1 p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                      min="0"
+                                    />{" "}
+                                    daq
+                                  </span>
+                                  <span>
+                                    Tartib:
+                                    <input
+                                      type="number"
+                                      value={lesson.order || 0}
+                                      onChange={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "order",
+                                          parseInt(e.target.value) || 0
+                                        )
+                                      }
+                                      onBlur={(e) =>
+                                        handleUpdateLesson(
+                                          lesson._id,
+                                          "order",
+                                          parseInt(e.target.value) || 0
+                                        )
+                                      }
+                                      className="w-12 ml-1 p-1 border border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none rounded"
+                                      min="0"
+                                    />
+                                  </span>
                                 </div>
                               </div>
                               <button
                                 onClick={() => handleDeleteLesson(lesson._id)}
-                                className="text-red-600 hover:text-red-800 text-sm"
+                                className="text-red-600 hover:text-red-800 text-sm ml-4 p-2"
+                                title="Darsni o'chirish"
                               >
                                 🗑️
                               </button>
                             </div>
+                            {module && (
+                              <div className="text-xs text-gray-400 mt-1">
+                                Modul: {module.title}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -570,19 +1003,28 @@ export default function EditCourse() {
             {activeTab === "preview" && (
               <div className="space-y-6">
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="font-semibold text-xl mb-4">📊 Kurs Statistikasi</h3>
+                  <h3 className="font-semibold text-xl mb-4">
+                    📊 Kurs Statistikasi
+                  </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">{modules.length}</div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {modules.length}
+                      </div>
                       <div className="text-sm text-gray-600">Modullar</div>
                     </div>
                     <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">{lessons.length}</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        {lessons.length}
+                      </div>
                       <div className="text-sm text-gray-600">Darslar</div>
                     </div>
                     <div className="text-center p-4 bg-yellow-50 rounded-lg">
                       <div className="text-2xl font-bold text-yellow-600">
-                        {lessons.reduce((total, lesson) => total + (lesson.duration || 0), 0)}
+                        {lessons.reduce(
+                          (total, lesson) => total + (lesson.duration || 0),
+                          0
+                        )}
                       </div>
                       <div className="text-sm text-gray-600">Jami daqiqa</div>
                     </div>
@@ -596,46 +1038,86 @@ export default function EditCourse() {
                 </div>
 
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h3 className="font-semibold text-xl mb-4">🏗️ Kurs Tuzilmasi</h3>
-                  {modules.map(module => {
-                    const moduleLessons = lessons.filter(lesson => lesson.moduleId === module._id);
-                    return (
-                      <div key={module._id} className="mb-4 last:mb-0">
-                        <h4 className="font-semibold text-lg mb-2">{module.title}</h4>
-                        {moduleLessons.length === 0 ? (
-                          <p className="text-gray-500 text-sm">Hozircha darslar mavjud emas</p>
-                        ) : (
-                          <div className="space-y-2 ml-4">
-                            {moduleLessons.map(lesson => (
-                              <div key={lesson._id} className="flex items-center gap-3 text-sm">
-                                <span className={
-                                  lesson.type === 'video' ? 'text-red-500' :
-                                  lesson.type === 'article' ? 'text-blue-500' : 'text-green-500'
-                                }>
-                                  {lesson.type === 'video' ? '🎬' : 
-                                   lesson.type === 'article' ? '📄' : '❓'}
-                                </span>
-                                <span>{lesson.title}</span>
-                                <span className="text-gray-500">({lesson.duration} daq)</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <h3 className="font-semibold text-xl mb-4">
+                    🏗️ Kurs Tuzilmasi
+                  </h3>
+                  {modules.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">
+                      Hozircha modullar mavjud emas
+                    </p>
+                  ) : (
+                    modules.map((module) => {
+                      const moduleLessons = lessons.filter(
+                        (lesson) =>
+                          lesson.module === module._id ||
+                          lesson.moduleId === module._id
+                      );
+                      return (
+                        <div key={module._id} className="mb-6 last:mb-0">
+                          <h4 className="font-semibold text-lg mb-3 flex items-center">
+                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm mr-2">
+                              {module.order || 0}
+                            </span>
+                            {module.title}
+                          </h4>
+                          {module.description && (
+                            <p className="text-gray-600 text-sm mb-3 ml-8">
+                              {module.description}
+                            </p>
+                          )}
+                          {moduleLessons.length === 0 ? (
+                            <p className="text-gray-500 text-sm ml-8">
+                              Hozircha darslar mavjud emas
+                            </p>
+                          ) : (
+                            <div className="space-y-2 ml-8">
+                              {moduleLessons.map((lesson) => (
+                                <div
+                                  key={lesson._id}
+                                  className="flex items-center gap-3 text-sm p-2 bg-gray-50 rounded"
+                                >
+                                  <span
+                                    className={
+                                      lesson.type === "video"
+                                        ? "text-red-500 bg-red-100 p-1 rounded"
+                                        : lesson.type === "article"
+                                        ? "text-blue-500 bg-blue-100 p-1 rounded"
+                                        : "text-green-500 bg-green-100 p-1 rounded"
+                                    }
+                                  >
+                                    {lesson.type === "video"
+                                      ? "🎬"
+                                      : lesson.type === "article"
+                                      ? "📄"
+                                      : "❓"}
+                                  </span>
+                                  <span className="font-medium flex-1">
+                                    {lesson.title}
+                                  </span>
+                                  <span className="text-gray-500 text-xs">
+                                    {lesson.duration || 0} daq • #
+                                    {lesson.order || 0}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <button
                     onClick={() => navigate("/teacher/courses")}
-                    className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
                   >
                     ← Orqaga
                   </button>
                   <button
-                    onClick={() => window.open(`/courses/${id}`, '_blank')}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    onClick={() => window.open(`/courses/${id}`, "_blank")}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                   >
                     👁️ Kursni Ko'rish
                   </button>
