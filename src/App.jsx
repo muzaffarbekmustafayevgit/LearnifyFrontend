@@ -32,14 +32,14 @@ import CreateCourse from "./pages/teacher/CreateCourse";
 // Student pages
 import MyCourses from "./pages/student/MyCourses";
 import CourseDetail from "./pages/student/CourseDetail";
-import LessonViewer from "./pages/student/LessonViewer";
 import TestPage from "./pages/student/TestPage";
 import Achievements from "./pages/student/Achievements";
 import Certificates from "./pages/student/Certificates";
-
+import CourseView from "./pages/student/CourseView";
 // Shared
 import NotFound from "./pages/NotFound";
 import Navbar from "./components/Navbar";
+import StudentDashboard from "./pages/student/StudentDashboard";
 
 export default function App() {
   const role = getUserRole(); // "admin" | "teacher" | "student"
@@ -92,11 +92,16 @@ export default function App() {
         {role === "student" && (
           <>
             <Route path="/student/my-courses" element={<MyCourses />} />
-            <Route path="/student/course/:courseId" element={<CourseDetail />} />
-            <Route path="/student/lesson/:id" element={<LessonViewer />} />
+            {/* <Route path="/student/course/:courseId" element={<CourseDetail />} /> */}
+
             <Route path="/student/test/:id" element={<TestPage />} />
             <Route path="/student/achievements" element={<Achievements />} />
             <Route path="/student/certificates" element={<Certificates />} />
+            <Route path="/student/dashboard" element={<StudentDashboard />} />
+            <Route path="/student/course/:courseId" element={<CourseDetail />} />
+        // Student routes qismiga qo'shing
+            <Route path="/student/course/:courseId/view" element={<CourseView />} />
+
           </>
         )}
 
