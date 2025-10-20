@@ -19,7 +19,8 @@ export default function ManageUsers() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/user/admin/users", {
+      // TO'G'RI ENDPOINT: /api/users/admin/users
+      const res = await fetch("http://localhost:5000/api/users/admin/users", {
         headers: { 
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -60,9 +61,10 @@ export default function ManageUsers() {
     setMessage("");
 
     try {
+      // TO'G'RI ENDPOINTLAR:
       const url = editingUser
-        ? `http://localhost:5000/api/user/admin/users/${editingUser._id}`
-        : "http://localhost:5000/api/user/admin/users";
+        ? `http://localhost:5000/api/users/admin/users/${editingUser._id}`
+        : "http://localhost:5000/api/users/admin/users";
 
       const method = editingUser ? "PUT" : "POST";
 
@@ -109,7 +111,8 @@ export default function ManageUsers() {
     if (!window.confirm("Foydalanuvchini o'chirishni xohlaysizmi?")) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/user/admin/users/${id}`, {
+      // TO'G'RI ENDPOINT: /api/users/admin/users/:id
+      const res = await fetch(`http://localhost:5000/api/users/admin/users/${id}`, {
         method: "DELETE",
         headers: { 
           "Authorization": `Bearer ${token}`,
@@ -118,6 +121,7 @@ export default function ManageUsers() {
       });
 
       const data = await res.json();
+console.log(data);
 
       if (!res.ok || !data.success) {
         throw new Error(data.message || "O'chirish amalga oshirilmadi");
