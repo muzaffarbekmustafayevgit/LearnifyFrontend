@@ -1,4 +1,4 @@
-// src/pages/admin/ManageUsers.jsx
+// src/pages/admin/ManageUsers.jsx - TO'G'RI VERSIYA
 import React, { useEffect, useState } from "react";
 
 export default function ManageUsers() {
@@ -19,7 +19,6 @@ export default function ManageUsers() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // TO'G'RI ENDPOINT: /api/users/admin/users
       const res = await fetch("http://localhost:5000/api/users/admin/users", {
         headers: { 
           "Authorization": `Bearer ${token}`,
@@ -27,14 +26,20 @@ export default function ManageUsers() {
         },
       });
 
+      console.log("Response status:", res.status);
+      
       if (!res.ok) {
+        const errorText = await res.text();
+        console.log("Error response:", errorText);
         throw new Error(`HTTP xatolik! Status: ${res.status}`);
       }
 
       const data = await res.json();
+      console.log("Response data:", data);
       
-      if (data.success) {
-        setUsers(data.data || data.users || []);
+      // TO'G'RI: data.users ni olish
+      if (data.users) {
+        setUsers(data.users);
       } else {
         throw new Error(data.message || "Ma'lumotlarni olishda xatolik");
       }
@@ -55,13 +60,12 @@ export default function ManageUsers() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // 🔹 Yangi user yaratish yoki mavjudini yangilash
+  // 🔹 Yangi user yaratish
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
     try {
-      // TO'G'RI ENDPOINTLAR:
       const url = editingUser
         ? `http://localhost:5000/api/users/admin/users/${editingUser._id}`
         : "http://localhost:5000/api/users/admin/users";
@@ -78,15 +82,16 @@ export default function ManageUsers() {
       });
 
       const data = await res.json();
+      console.log("Submit response:", data);
 
-      if (!res.ok || !data.success) {
+      if (!res.ok) {
         throw new Error(data.message || "So'rov bajarilmadi");
       }
 
       setMessage(`✅ ${editingUser ? "Foydalanuvchi yangilandi" : "Yangi foydalanuvchi qo'shildi"}`);
       setForm({ name: "", email: "", password: "", role: "student" });
       setEditingUser(null);
-      fetchUsers(); // Ro'yxatni yangilash
+      fetchUsers();
 
     } catch (err) {
       console.error("Xatolik:", err);
@@ -99,7 +104,7 @@ export default function ManageUsers() {
     setForm({
       name: user.name,
       email: user.email,
-      password: "", // Parolni bo'sh qoldiramiz
+      password: "",
       role: user.role,
     });
     setEditingUser(user);
@@ -111,7 +116,6 @@ export default function ManageUsers() {
     if (!window.confirm("Foydalanuvchini o'chirishni xohlaysizmi?")) return;
 
     try {
-      // TO'G'RI ENDPOINT: /api/users/admin/users/:id
       const res = await fetch(`http://localhost:5000/api/users/admin/users/${id}`, {
         method: "DELETE",
         headers: { 
@@ -121,14 +125,14 @@ export default function ManageUsers() {
       });
 
       const data = await res.json();
-console.log(data);
+      console.log("Delete response:", data);
 
-      if (!res.ok || !data.success) {
+      if (!res.ok) {
         throw new Error(data.message || "O'chirish amalga oshirilmadi");
       }
 
       setMessage("✅ Foydalanuvchi muvaffaqiyatli o'chirildi");
-      fetchUsers(); // Ro'yxatni yangilash
+      fetchUsers();
 
     } catch (err) {
       console.error("O'chirishda xato:", err);
@@ -228,7 +232,7 @@ console.log(data);
       {/* 🔹 Foydalanuvchilar ro'yxati */}
       <div className="overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm">
         <div className="p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold">📋 Barcha Foydalanuvchilar</h2>
+          <h2 className="text-lg font-semibold">📋 Barcha Foydalanuvchilar ({users.length})</h2>
         </div>
 
         {loading ? (
@@ -248,6 +252,7 @@ console.log(data);
                   <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Ism</th>
                   <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Email</th>
                   <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Rol</th>
+                  <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Holat</th>
                   <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Amallar</th>
                 </tr>
               </thead>
@@ -278,16 +283,25 @@ console.log(data);
                          '🎓 Talaba'}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {user.isActive ? '🟢 Faol' : '🔴 Nofaol'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 space-x-2 text-sm font-medium whitespace-nowrap">
                       <button
                         onClick={() => handleEdit(user)}
                         className="px-3 py-1 text-yellow-600 transition rounded-md hover:text-yellow-900 bg-yellow-50 hover:bg-yellow-100"
+                        disabled={!user.isActive}
                       >
                         ✏️ Tahrirlash
                       </button>
                       <button
                         onClick={() => handleDelete(user._id)}
                         className="px-3 py-1 text-red-600 transition rounded-md hover:text-red-900 bg-red-50 hover:bg-red-100"
+                        disabled={!user.isActive}
                       >
                         🗑️ O'chirish
                       </button>

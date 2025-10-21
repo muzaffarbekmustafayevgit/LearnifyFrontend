@@ -70,8 +70,7 @@ if (data.data.user.role==="admin"){
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
-          type="email"
-          name="email"
+          type="password"          name="email"
           placeholder="Email"
           value={form.email}
           onChange={handleChange}

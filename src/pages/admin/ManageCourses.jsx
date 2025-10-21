@@ -1,17 +1,17 @@
+// src/pages/admin/ManageCourses.jsx - TO'G'RILANGAN
 import { useEffect, useState } from "react";
 
-export default function AdminCourses() {
+export default function ManageCourses() {
   const [courses, setCourses] = useState([]);
- const [form, setForm] = useState({
-  title: "",
-  description: "",
-  category: "",
-  status: "draft",
-});
-
-
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    category: "",
+    status: "draft",
+  });
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const token = localStorage.getItem("accessToken");
   const API_URL = "http://localhost:5000/api/courses";
@@ -20,23 +20,39 @@ export default function AdminCourses() {
     fetchCourses();
   }, []);
 
-  // 🟩 Barcha kurslarni olish
+  // 🟩 Barcha kurslarni olish (ADMIN uchun)
   const fetchCourses = async () => {
     try {
       setLoading(true);
-      const res = await fetch(API_URL, {
-        headers: { Authorization: `Bearer ${token}` },
+      setError("");
+      
+      console.log('Fetching admin courses...');
+      const res = await fetch(`${API_URL}/admin/all-courses`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
       });
+      
+      console.log('Response status:', res.status);
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'Unknown error' }));
+        console.log('Error response:', errorData);
+        throw new Error(errorData.message || `HTTP xatolik! Status: ${res.status}`);
+      }
+      
       const data = await res.json();
+      console.log("Courses data:", data);
+      
       if (data.success) {
-        const list = data.data?.courses || data.data || [];
-        setCourses(list);
+        setCourses(data.courses || []);
       } else {
-        alert("Kurslarni olishda xatolik");
+        throw new Error(data.message || "Ma'lumotlarni olishda xatolik");
       }
     } catch (err) {
       console.error("Fetch error:", err);
-      alert("Server bilan aloqa yo‘q!");
+      setError(`❌ ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -48,8 +64,12 @@ export default function AdminCourses() {
     if (!form.title.trim()) return alert("Kurs nomini kiriting!");
 
     try {
+      setError("");
       const method = editingId ? "PUT" : "POST";
       const url = editingId ? `${API_URL}/${editingId}` : API_URL;
+      
+      console.log('Submitting course:', { method, url, form });
+      
       const res = await fetch(url, {
         method,
         headers: {
@@ -60,16 +80,23 @@ export default function AdminCourses() {
       });
 
       const data = await res.json();
+      console.log("Submit response:", data);
+
+      if (!res.ok) {
+        throw new Error(data.message || "So'rov bajarilmadi");
+      }
+
       if (data.success) {
-        alert(editingId ? "Kurs yangilandi!" : "Kurs qo‘shildi!");
-        setForm({ title: "", description: "", status: "draft" });
+        alert(editingId ? "Kurs yangilandi!" : "Kurs qo'shildi!");
+        setForm({ title: "", description: "", category: "", status: "draft" });
         setEditingId(null);
         fetchCourses();
       } else {
-        alert("Amalda xatolik: " + data.message);
+        throw new Error(data.message || "Amalda xatolik");
       }
     } catch (err) {
       console.error("Submit error:", err);
+      setError(`❌ ${err.message}`);
     }
   };
 
@@ -78,181 +105,224 @@ export default function AdminCourses() {
     setForm({
       title: course.title,
       description: course.description || "",
+      category: course.category || "",
       status: course.status || "draft",
     });
     setEditingId(course._id);
+    setError("");
   };
 
-  // ❌ Kursni o‘chirish
+  // ❌ Kursni o'chirish
   const handleDelete = async (id) => {
-    if (!window.confirm("Bu kursni o‘chirmoqchimisiz?")) return;
+    if (!window.confirm("Bu kursni o'chirmoqchimisiz?")) return;
     try {
+      setError("");
       const res = await fetch(`${API_URL}/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
       });
+      
       const data = await res.json();
+      console.log("Delete response:", data);
+
+      if (!res.ok) {
+        throw new Error(data.message || "O'chirish amalga oshirilmadi");
+      }
+
       if (data.success) {
-        alert("Kurs o‘chirildi!");
-        setCourses(courses.filter((c) => c._id !== id));
+        alert("Kurs o'chirildi!");
+        fetchCourses();
       } else {
-        alert("O‘chirishda xatolik: " + data.message);
+        throw new Error(data.message || "O'chirishda xatolik");
       }
     } catch (err) {
       console.error("Delete error:", err);
+      setError(`❌ ${err.message}`);
     }
   };
 
   // 🧹 Formani tozalash
   const clearForm = () => {
-    setForm({ title: "", description: "", status: "draft" });
+    setForm({ title: "", description: "", category: "", status: "draft" });
     setEditingId(null);
+    setError("");
   };
 
- return (
-  <div className="max-w-5xl p-6 mx-auto">
-    
+  return (
+    <div className="max-w-5xl p-6 mx-auto">
+      <h1 className="mb-6 text-2xl font-bold text-gray-800">👑 Admin - Barcha Kurslar</h1>
 
-    {/* 🔹 CREATE / UPDATE FORM */}
-    <form
-      onSubmit={handleSubmit}
-      className="p-6 mb-10 bg-white border border-gray-200 rounded-2xl shadow-md"
-    >
-      <h2 className="mb-5 text-xl font-semibold text-gray-700">
-        {editingId ? "✏️ Kursni tahrirlash" : "➕ Yangi kurs qo‘shish"}
-      </h2>
+      {/* Xatolik ko'rsatish */}
+      {error && (
+        <div className="p-3 mb-4 text-red-700 bg-red-100 border border-red-300 rounded">
+          {error}
+        </div>
+      )}
 
-      {/* Kurs nomi */}
-      <div className="mb-4">
-        <label className="block mb-1 text-sm font-medium text-gray-700">
-          Kurs nomi:
-        </label>
-        <input
-          type="text"
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-          className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          placeholder="Masalan: Web Dasturlash Asoslari"
-        />
-      </div>
+      {/* 🔹 CREATE / UPDATE FORM */}
+      <form
+        onSubmit={handleSubmit}
+        className="p-6 mb-10 bg-white border border-gray-200 shadow-md rounded-2xl"
+      >
+        <h2 className="mb-5 text-xl font-semibold text-gray-700">
+          {editingId ? "✏️ Kursni tahrirlash" : "➕ Yangi kurs qo'shish"}
+        </h2>
 
-      {/* Tavsif */}
-      <div className="mb-4">
-        <label className="block mb-1 text-sm font-medium text-gray-700">
-          Tavsif:
-        </label>
-        <textarea
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          rows="3"
-          placeholder="Kurs haqida qisqacha..."
-        />
-      </div>
+        {/* Kurs nomi */}
+        <div className="mb-4">
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            Kurs nomi:
+          </label>
+          <input
+            type="text"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            placeholder="Masalan: Web Dasturlash Asoslari"
+            required
+          />
+        </div>
 
-      {/* Kategoriya */}
-      <div className="mb-4">
-        <label className="block mb-1 text-sm font-medium text-gray-700">
-          Kategoriya:
-        </label>
-        <select
-          value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-          className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-        >
-          <option value="">Tanlang...</option>
-          <option value="programming">💻 Dasturlash</option>
-          <option value="design">🎨 Dizayn</option>
-          <option value="marketing">📢 Marketing</option>
-          <option value="business">💼 Biznes</option>
-        </select>
-      </div>
+        {/* Tavsif */}
+        <div className="mb-4">
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            Tavsif:
+          </label>
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            rows="3"
+            placeholder="Kurs haqida qisqacha..."
+          />
+        </div>
 
-      {/* Holati */}
-      <div className="mb-6">
-        <label className="block mb-1 text-sm font-medium text-gray-700">
-          Holati:
-        </label>
-        <select
-          value={form.status}
-          onChange={(e) => setForm({ ...form, status: e.target.value })}
-          className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-        >
-          <option value="draft">📝 Draft</option>
-          <option value="published">✅ Published</option>
-          <option value="pending">🕓 Pending</option>
-        </select>
-      </div>
-
-      {/* Tugmalar */}
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="submit"
-          className="px-5 py-2.5 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-        >
-          {editingId ? "💾 Saqlash" : "➕ Qo‘shish"}
-        </button>
-
-        {editingId && (
-          <button
-            type="button"
-            onClick={clearForm}
-            className="px-5 py-2.5 text-white bg-gray-500 rounded-lg hover:bg-gray-600 transition-colors duration-200"
+        {/* Kategoriya */}
+        <div className="mb-4">
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            Kategoriya:
+          </label>
+          <select
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+            className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
           >
-            Bekor qilish
-          </button>
-        )}
-      </div>
-    </form>
+            <option value="">Tanlang...</option>
+            <option value="programming">💻 Dasturlash</option>
+            <option value="design">🎨 Dizayn</option>
+            <option value="marketing">📢 Marketing</option>
+            <option value="business">💼 Biznes</option>
+            <option value="language">🗣️ Til</option>
+            <option value="science">🔬 Fan</option>
+          </select>
+        </div>
 
-    {/* 🔹 COURSES LIST */}
-    <section className="space-y-3">
-      {loading ? (
-        <p className="text-center text-gray-500">⏳ Kurslar yuklanmoqda...</p>
-      ) : courses.length === 0 ? (
-        <p className="text-center text-gray-500">
-          📭 Hech qanday kurs topilmadi
-        </p>
-      ) : (
-        <ul className="space-y-4">
-          {courses.map((c) => (
-            <li
-              key={c._id}
-              className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+        {/* Holati */}
+        <div className="mb-6">
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            Holati:
+          </label>
+          <select
+            value={form.status}
+            onChange={(e) => setForm({ ...form, status: e.target.value })}
+            className="w-full p-2.5 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          >
+            <option value="draft">📝 Draft</option>
+            <option value="published">✅ Published</option>
+            <option value="pending">🕓 Pending</option>
+            <option value="archived">📦 Archived</option>
+          </select>
+        </div>
+
+        {/* Tugmalar */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="submit"
+            className="px-5 py-2.5 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+            disabled={loading}
+          >
+            {loading ? "⏳" : editingId ? "💾 Saqlash" : "➕ Qo'shish"}
+          </button>
+
+          {editingId && (
+            <button
+              type="button"
+              onClick={clearForm}
+              className="px-5 py-2.5 text-white bg-gray-500 rounded-lg hover:bg-gray-600 transition-colors duration-200"
             >
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  {c.title}
-                </h3>
-                <p className="text-sm text-gray-600 line-clamp-2">
-                  {c.description || "Tavsif kiritilmagan"}
-                </p>
-                <div className="mt-1 text-xs text-gray-500 flex flex-wrap gap-2">
-                  <span>📂 {c.category}</span>
-                  <span>📈 Status: {c.status}</span>
+              Bekor qilish
+            </button>
+          )}
+        </div>
+      </form>
+
+      {/* 🔹 COURSES LIST */}
+      <section className="space-y-3">
+        {loading ? (
+          <div className="text-center">
+            <div className="inline-block w-8 h-8 border-b-2 border-blue-600 rounded-full animate-spin"></div>
+            <p className="mt-2 text-gray-600">Kurslar yuklanmoqda...</p>
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 bg-white border rounded-lg">
+            <p className="text-lg">📭 Hech qanday kurs topilmadi</p>
+            <p className="mt-2 text-sm">Yangi kurs qo'shish uchun yuqoridagi formadan foydalaning</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {courses.map((course) => (
+              <div
+                key={course._id}
+                className="flex flex-col p-4 transition-shadow bg-white border border-gray-200 shadow-sm sm:flex-row sm:items-center sm:justify-between rounded-xl hover:shadow-md"
+              >
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    {course.title}
+                  </h3>
+                  <p className="text-sm text-gray-600 line-clamp-2">
+                    {course.description || "Tavsif kiritilmagan"}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-500">
+                    <span>📂 {course.category || "Kategoriya yo'q"}</span>
+                    <span className={`px-2 py-1 rounded ${
+                      course.status === 'published' ? 'bg-green-100 text-green-800' :
+                      course.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                      course.status === 'pending' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {course.status}
+                    </span>
+                    {course.teacher && (
+                      <span>👨‍🏫 {course.teacher.name}</span>
+                    )}
+                    {course.students && (
+                      <span>👥 {course.students.length} o'quvchi</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-3 sm:mt-0">
+                  <button
+                    onClick={() => handleEdit(course)}
+                    className="px-3 py-1.5 text-sm text-white bg-yellow-500 rounded hover:bg-yellow-600 transition-colors"
+                  >
+                    ✏️ Tahrirlash
+                  </button>
+                  <button
+                    onClick={() => handleDelete(course._id)}
+                    className="px-3 py-1.5 text-sm text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
+                  >
+                    ❌ O'chirish
+                  </button>
                 </div>
               </div>
-
-              <div className="flex gap-2 mt-3 sm:mt-0">
-                <button
-                  onClick={() => handleEdit(c)}
-                  className="px-3 py-1.5 text-sm text-white bg-yellow-500 rounded hover:bg-yellow-600 transition-colors"
-                >
-                  ✏️ Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(c._id)}
-                  className="px-3 py-1.5 text-sm text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
-                >
-                  ❌ Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  </div>
-);
-
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
