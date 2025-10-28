@@ -17,11 +17,12 @@ export default function Login() {
     setMessage("Tekshirilmoqda...");
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
+      const res = await fetch("http://localhost:5000/api/auths/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // CORS uchun kerak
         body: JSON.stringify(form),
       });
 
@@ -37,15 +38,18 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(data.data.user));
 
       setMessage("Muvaffaqiyatli!");
-if (data.data.user.role==="student"){
-  navigate('/student/dashboard')
-}
-if (data.data.user.role==="teacher"){
-  navigate('/teacher/dashboard')
-}
-if (data.data.user.role==="admin"){
-  navigate('/admin/dashboard')
-}
+
+      // Role bo'yicha yo'naltirish
+      const role = data.data.user.role;
+      if (role === "student") {
+        navigate('/student/dashboard');
+      } else if (role === "teacher") {
+        navigate('/teacher/dashboard');
+      } else if (role === "admin") {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/dashboard'); // default
+      }
 
     } catch (err) {
       setMessage(err.message);
@@ -70,7 +74,8 @@ if (data.data.user.role==="admin"){
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
-          type="password"          name="email"
+          type="email" // ✅ To'g'rilandi: password -> email
+          name="email"
           placeholder="Email"
           value={form.email}
           onChange={handleChange}
