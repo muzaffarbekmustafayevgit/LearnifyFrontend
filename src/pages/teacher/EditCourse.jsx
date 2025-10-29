@@ -23,7 +23,6 @@ const validateCourse = (course, modules, lessons) => {
   if (modules.length === 0) errors.push("Kamida bitta modul");
   if (lessons.length === 0) errors.push("Kamida bitta video dars");
 
-  // Modullarda video darslar tekshirish
   const modulesWithoutLessons = modules.filter(module => 
     !lessons.some(lesson => lesson.moduleId === module._id || lesson.module === module._id)
   );
@@ -32,7 +31,6 @@ const validateCourse = (course, modules, lessons) => {
     errors.push(`Video darssiz modullar: ${modulesWithoutLessons.map(m => m.title).join(', ')}`);
   }
 
-  // Video URL larni tekshirish
   const lessonsWithoutVideo = lessons.filter(lesson => !lesson.content?.trim());
   if (lessonsWithoutVideo.length > 0) {
     errors.push(`Video manbasi bo'lmagan darslar: ${lessonsWithoutVideo.map(l => l.title).join(', ')}`);
@@ -181,13 +179,11 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Fayl turini tekshirish
     if (!file.type.startsWith('video/')) {
       alert('Iltimos, faqat video fayl yuklang!');
       return;
     }
 
-    // Fayl hajmini tekshirish (100MB)
     if (file.size > 100 * 1024 * 1024) {
       alert('Video hajmi 100MB dan kichik boʻlishi kerak!');
       return;
@@ -201,7 +197,6 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
     try {
       const token = localStorage.getItem("accessToken");
       
-      // TO'G'RI URL: /api/drive/upload (drives emas)
       const response = await fetch('http://localhost:5000/api/drive/upload', {
         method: 'POST',
         headers: {
@@ -237,14 +232,12 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
       alert('Video yuklashda xatolik: ' + error.message);
     } finally {
       setUploading(false);
-      // Input qiymatini tozalash
       event.target.value = '';
     }
   };
 
   return (
     <div className="space-y-3">
-      {/* Video URL input */}
       <div>
         <label className="block mb-2 font-medium text-gray-700">
           Video Manbasi *
@@ -254,12 +247,11 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
           placeholder="Video URL (YouTube, Vimeo, Google Drive yoki boshqa link)"
           value={currentVideoUrl || ''}
           onChange={(e) => onVideoUpload(e.target.value)}
-          className="w-full p-3 transition-colors border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent"
           required
         />
       </div>
 
-      {/* Yuklash qismi */}
       <div className="p-4 border-2 border-gray-300 border-dashed rounded-lg bg-gray-50">
         <div className="text-center">
           <input
@@ -296,7 +288,6 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
         </div>
       </div>
 
-      {/* Video preview */}
       {currentVideoUrl && (
         <div className="p-3 bg-gray-100 rounded-lg">
           <p className="mb-2 text-sm font-medium text-gray-700">Video ko'rib chiqish:</p>
@@ -347,19 +338,38 @@ export default function EditCourse() {
   const token = localStorage.getItem("accessToken");
   const API_URL = "http://localhost:5000/api";
 
-  // 📡 API Service Functions
+  // 📡 API Service Functions - YAXSHILANGAN VERSIYA
   const apiRequest = useCallback(async (endpoint, options = {}) => {
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    const config = {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
         ...options.headers,
       },
       ...options,
-    });
+    };
+
+    // Agar body bo'lsa, stringify qilish
+    if (config.body && typeof config.body !== 'string') {
+      config.body = JSON.stringify(config.body);
+    }
+
+    console.log(`📤 API So'rov: ${endpoint}`, config);
+
+    const response = await fetch(`${API_URL}${endpoint}`, config);
+
+    console.log(`📨 API Javob: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      let errorMessage = `API Error: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.error || errorMessage;
+        console.error('❌ API Xato tafsilotlari:', errorData);
+      } catch (e) {
+        console.error('❌ API Xato parse qilishda:', e);
+      }
+      throw new Error(errorMessage);
     }
 
     return await response.json();
@@ -418,12 +428,12 @@ export default function EditCourse() {
     try {
       await apiRequest("/modules", {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           title: newModule.title,
           description: newModule.description,
           courseId: id,
           order: newModule.order || modules.length + 1,
-        }),
+        },
       });
 
       alert("✅ Modul muvaffaqiyatli qo'shildi!");
@@ -435,65 +445,72 @@ export default function EditCourse() {
 
     } catch (error) {
       console.error("Modul qo'shishda xatolik:", error);
-      alert("Modul qo'shishda xatolik yuz berdi");
+      alert("Modul qo'shishda xatolik yuz berdi: " + error.message);
     }
   };
 
-  // ➕ VIDEO DARS QO'SHISH
-  const handleAddLesson = async (e) => {
-    e.preventDefault();
-    
-    if (!newLesson.moduleId) {
-      alert("Iltimos, modulni tanlang!");
-      return;
-    }
+  // ➕ VIDEO DARS QO'SHISH - YAXSHILANGAN VERSIYA
+const handleAddLesson = async (e) => {
+  e.preventDefault();
+  
+  if (!newLesson.moduleId) {
+    alert("Iltimos, modulni tanlang!");
+    return;
+  }
 
-    if (!newLesson.title.trim()) {
-      alert("Iltimos, dars nomini kiriting!");
-      return;
-    }
+  if (!newLesson.title.trim()) {
+    alert("Iltimos, dars nomini kiriting!");
+    return;
+  }
 
-    if (!newLesson.content?.trim()) {
-      alert("Iltimos, video manbasini kiriting!");
-      return;
-    }
+  if (!newLesson.content?.trim()) {
+    alert("Iltimos, video manbasini kiriting!");
+    return;
+  }
 
-    try {
-      const lessonData = {
-        title: newLesson.title,
-        content: newLesson.content,
-        type: "video",
-        duration: newLesson.duration,
-        courseId: id,
-        moduleId: newLesson.moduleId,
-        order: newLesson.order || lessons.filter(l => 
-          l.module === newLesson.moduleId || l.moduleId === newLesson.moduleId
-        ).length + 1,
-      };
+  try {
+    const lessonData = {
+      title: newLesson.title,
+      description: "", // Agar kerak bo'lsa qo'shing
+      courseId: id,
+      moduleId: newLesson.moduleId,
+      videoUrl: newLesson.content, // CONTENT ni VIDEOURL ga o'zgartiramiz
+      duration: parseInt(newLesson.duration) || 0,
+      order: parseInt(newLesson.order) || (lessons.filter(l => 
+        l.module === newLesson.moduleId || l.moduleId === newLesson.moduleId
+      ).length + 1),
+      isFree: false,
+      type: "video"
+    };
 
-      await apiRequest("/lessons", {
-        method: "POST",
-        body: JSON.stringify(lessonData),
-      });
+    console.log('📤 Dars maʼlumotlari:', lessonData);
 
-      alert("✅ Video dars muvaffaqiyatli qo'shildi!");
-      setNewLesson({
-        title: "",
-        content: "",
-        duration: 0,
-        order: 0,
-        moduleId: "",
-      });
+    const result = await apiRequest("/lessons", {
+      method: "POST",
+      body: lessonData,
+    });
 
-      // Yangilangan video darslarni yuklash
-      const lessonsData = await apiRequest(`/lessons/course/${id}`);
-      setLessons(lessonsData.data?.lessons || lessonsData.lessons || []);
+    console.log('✅ Dars qoshish natijasi:', result);
 
-    } catch (error) {
-      console.error("Video dars qo'shishda xatolik:", error);
-      alert("Video dars qo'shishda xatolik yuz berdi");
-    }
-  };
+    alert("✅ Video dars muvaffaqiyatli qo'shildi!");
+    setNewLesson({
+      title: "",
+      content: "",
+      duration: 0,
+      order: 0,
+      moduleId: "",
+    });
+
+    // Yangilangan video darslarni yuklash
+    const lessonsData = await apiRequest(`/lessons/course/${id}`);
+    setLessons(lessonsData.data?.lessons || lessonsData.data || []);
+
+  } catch (error) {
+    console.error("Video dars qo'shishda xatolik:", error);
+    alert("Video dars qo'shishda xatolik yuz berdi: " + error.message);
+  }
+};
+
 
   // 💾 KURSNI YANGILASH
   const handleUpdateCourse = async (e) => {
@@ -503,7 +520,7 @@ export default function EditCourse() {
     try {
       await apiRequest(`/courses/${id}`, {
         method: "PUT",
-        body: JSON.stringify({
+        body: {
           title: course.title,
           description: course.description,
           category: course.category,
@@ -513,13 +530,13 @@ export default function EditCourse() {
             currency: "USD",
             isFree: Number(course.price) === 0,
           },
-        }),
+        },
       });
 
       alert("✅ Kurs muvaffaqiyatli yangilandi!");
     } catch (error) {
       console.error("Kursni yangilashda xatolik:", error);
-      alert("Kursni yangilashda xatolik yuz berdi");
+      alert("Kursni yangilashda xatolik yuz berdi: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -533,10 +550,10 @@ export default function EditCourse() {
 
       await apiRequest(`/modules/${moduleId}`, {
         method: "PUT",
-        body: JSON.stringify({
+        body: {
           ...moduleToUpdate,
           [field]: value,
-        }),
+        },
       });
 
       // Local state yangilash
@@ -545,7 +562,7 @@ export default function EditCourse() {
       ));
     } catch (error) {
       console.error("Modulni yangilashda xatolik:", error);
-      alert("Modulni yangilashda xatolik yuz berdi");
+      alert("Modulni yangilashda xatolik yuz berdi: " + error.message);
     }
   };
 
@@ -557,10 +574,10 @@ export default function EditCourse() {
 
       await apiRequest(`/lessons/${lessonId}`, {
         method: "PUT",
-        body: JSON.stringify({
+        body: {
           ...lessonToUpdate,
           [field]: value,
-        }),
+        },
       });
 
       // Local state yangilash
@@ -569,7 +586,7 @@ export default function EditCourse() {
       ));
     } catch (error) {
       console.error("Video darsni yangilashda xatolik:", error);
-      alert("Video darsni yangilashda xatolik yuz berdi");
+      alert("Video darsni yangilashda xatolik yuz berdi: " + error.message);
     }
   };
 
@@ -585,7 +602,7 @@ export default function EditCourse() {
       setModules(modulesData.data?.modules || modulesData.modules || []);
     } catch (error) {
       console.error("Modulni o'chirishda xatolik:", error);
-      alert("Modulni o'chirishda xatolik yuz berdi");
+      alert("Modulni o'chirishda xatolik yuz berdi: " + error.message);
     }
   };
 
@@ -600,7 +617,7 @@ export default function EditCourse() {
       setLessons(lessonsData.data?.lessons || lessonsData.lessons || []);
     } catch (error) {
       console.error("Video darsni o'chirishda xatolik:", error);
-      alert("Video darsni o'chirishda xatolik yuz berdi");
+      alert("Video darsni o'chirishda xatolik yuz berdi: " + error.message);
     }
   };
 
@@ -611,7 +628,6 @@ export default function EditCourse() {
     if (validationErrors.length > 0) {
       alert(`❌ Quyidagi kamchiliklar tuzatilishi kerak:\n• ${validationErrors.join('\n• ')}`);
       
-      // Birinchi xatolik bo'yicha tabga o'tish
       if (validationErrors.some(err => err.includes('modul'))) setActiveTab("modules");
       else if (validationErrors.some(err => err.includes('video'))) setActiveTab("lessons");
       else setActiveTab("basic");
@@ -629,7 +645,7 @@ export default function EditCourse() {
       setCourse(prev => ({ ...prev, status: COURSE_STATUS.PUBLISHED }));
     } catch (error) {
       console.error("Nashr qilishda xatolik:", error);
-      alert("Kursni nashr qilishda xatolik yuz berdi");
+      alert("Kursni nashr qilishda xatolik yuz berdi: " + error.message);
     } finally {
       setPublishing(false);
     }
@@ -646,7 +662,7 @@ export default function EditCourse() {
       setCourse(prev => ({ ...prev, status: COURSE_STATUS.DRAFT }));
     } catch (error) {
       console.error("Nashrdan olishda xatolik:", error);
-      alert("Kursni nashrdan olishda xatolik yuz berdi");
+      alert("Kursni nashrdan olishda xatolik yuz berdi: " + error.message);
     } finally {
       setPublishing(false);
     }
