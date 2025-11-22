@@ -31,7 +31,7 @@ const validateCourse = (course, modules, lessons) => {
     errors.push(`Video darssiz modullar: ${modulesWithoutLessons.map(m => m.title).join(', ')}`);
   }
 
-  const lessonsWithoutVideo = lessons.filter(lesson => !lesson.content?.trim());
+  const lessonsWithoutVideo = lessons.filter(lesson => !lesson.videoUrl?.trim());
   if (lessonsWithoutVideo.length > 0) {
     errors.push(`Video manbasi bo'lmagan darslar: ${lessonsWithoutVideo.map(l => l.title).join(', ')}`);
   }
@@ -65,7 +65,8 @@ const ActionButton = ({
   variant = "primary", 
   disabled = false, 
   loading = false,
-  icon = null 
+  icon = null,
+  type = "button"
 }) => {
   const baseStyles = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2";
   const variants = {
@@ -78,6 +79,7 @@ const ActionButton = ({
 
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled || loading}
       className={`${baseStyles} ${variants[variant]} ${
@@ -155,7 +157,24 @@ const VideoPreview = ({ videoUrl }) => {
     }
   }
 
-  // Oddiy video fayl
+  // Local video fayl
+  if (videoUrl.startsWith('/uploads/') || videoUrl.startsWith('http://localhost')) {
+    return (
+      <div className="mt-2">
+        <video
+          controls
+          width="100%"
+          height="200"
+          className="rounded-lg"
+        >
+          <source src={videoUrl} type="video/mp4" />
+          Sizning brauzeringiz video elementni qo'llab-quvvatlamaydi.
+        </video>
+      </div>
+    );
+  }
+
+  // Oddiy video URL
   return (
     <div className="mt-2">
       <video
@@ -171,7 +190,8 @@ const VideoPreview = ({ videoUrl }) => {
   );
 };
 
-// Video yuklash komponenti
+
+// Video yuklash komponenti - TUZATILGAN VERSIYA
 const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
   const [uploading, setUploading] = useState(false);
 
@@ -184,8 +204,8 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
       return;
     }
 
-    if (file.size > 100 * 1024 * 1024) {
-      alert('Video hajmi 100MB dan kichik boʻlishi kerak!');
+    if (file.size > 500 * 1024 * 1024) {
+      alert('Video hajmi 500MB dan kichik boʻlishi kerak!');
       return;
     }
 
@@ -197,10 +217,12 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
     try {
       const token = localStorage.getItem("accessToken");
       
-      const response = await fetch('http://localhost:5000/api/drive/upload', {
+      // ✅ ENDPOINTNI TO'G'RILAYMIZ
+      const response = await fetch('http://localhost:5000/api/lessons/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          // ❌ Content-Type ni O'CHIRAMIZ - FormData uchun kerak emas
         },
         body: formData,
       });
@@ -221,8 +243,8 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
       const result = await response.json();
       console.log('✅ Yuklash natijasi:', result);
       
-      if (result.file && result.file.webViewLink) {
-        onVideoUpload(result.file.webViewLink);
+      if (result.data && result.data.videoUrl) {
+        onVideoUpload(result.data.videoUrl);
         alert('✅ Video muvaffaqiyatli yuklandi!');
       } else {
         throw new Error('Serverdan noto‘g‘ri javob');
@@ -243,12 +265,11 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
           Video Manbasi *
         </label>
         <input
-          type="url"
-          placeholder="Video URL (YouTube, Vimeo, Google Drive yoki boshqa link)"
+          type="text"
+          placeholder="Video URL (YouTube, Vimeo yoki boshqa link)"
           value={currentVideoUrl || ''}
           onChange={(e) => onVideoUpload(e.target.value)}
           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-          required
         />
       </div>
 
@@ -283,7 +304,7 @@ const VideoUploader = ({ onVideoUpload, currentVideoUrl }) => {
             )}
           </label>
           <p className="mt-2 text-sm text-gray-500">
-            MP4, MOV yoki boshqa video formatlari (maks. 100MB)
+            MP4, MOV yoki boshqa video formatlari (maks. 500MB)
           </p>
         </div>
       </div>
@@ -328,7 +349,7 @@ export default function EditCourse() {
   
   const [newLesson, setNewLesson] = useState({
     title: "",
-    content: "",
+    videoUrl: "", // ✅ content o'rniga videoUrl
     duration: 0,
     order: 0,
     moduleId: "",
@@ -386,9 +407,13 @@ export default function EditCourse() {
         apiRequest(`/lessons/course/${id}`)
       ]);
 
+      console.log('📥 Kurs maʼlumotlari:', courseData);
+      console.log('📥 Modullar:', modulesData);
+      console.log('📥 Darslar:', lessonsData);
+
       // Kurs ma'lumotlari
-      if (courseData.data?.course) {
-        const c = courseData.data.course;
+      if (courseData.data?.course || courseData.data) {
+        const c = courseData.data.course || courseData.data;
         setCourse({
           title: c.title || "",
           description: c.description || "",
@@ -400,8 +425,8 @@ export default function EditCourse() {
       }
 
       // Modullar va video darslar
-      setModules(modulesData.data?.modules || modulesData.modules || []);
-      setLessons(lessonsData.data?.lessons || lessonsData.lessons || []);
+      setModules(modulesData.data?.modules || modulesData.modules || modulesData.data || []);
+      setLessons(lessonsData.data?.lessons || lessonsData.lessons || lessonsData.data || []);
 
     } catch (error) {
       console.error("Ma'lumotlarni yuklashda xatolik:", error);
@@ -441,7 +466,7 @@ export default function EditCourse() {
       
       // Yangilangan modullarni yuklash
       const modulesData = await apiRequest(`/modules/course/${id}`);
-      setModules(modulesData.data?.modules || modulesData.modules || []);
+      setModules(modulesData.data?.modules || modulesData.modules || modulesData.data || []);
 
     } catch (error) {
       console.error("Modul qo'shishda xatolik:", error);
@@ -449,68 +474,67 @@ export default function EditCourse() {
     }
   };
 
-  // ➕ VIDEO DARS QO'SHISH - YAXSHILANGAN VERSIYA
-const handleAddLesson = async (e) => {
-  e.preventDefault();
-  
-  if (!newLesson.moduleId) {
-    alert("Iltimos, modulni tanlang!");
-    return;
-  }
+  // ➕ VIDEO DARS QO'SHISH - TUZATILGAN VERSIYA
+  const handleAddLesson = async (e) => {
+    e.preventDefault();
+    
+    if (!newLesson.moduleId) {
+      alert("Iltimos, modulni tanlang!");
+      return;
+    }
 
-  if (!newLesson.title.trim()) {
-    alert("Iltimos, dars nomini kiriting!");
-    return;
-  }
+    if (!newLesson.title.trim()) {
+      alert("Iltimos, dars nomini kiriting!");
+      return;
+    }
 
-  if (!newLesson.content?.trim()) {
-    alert("Iltimos, video manbasini kiriting!");
-    return;
-  }
+    if (!newLesson.videoUrl?.trim()) {
+      alert("Iltimos, video manbasini kiriting!");
+      return;
+    }
 
-  try {
-    const lessonData = {
-      title: newLesson.title,
-      description: "", // Agar kerak bo'lsa qo'shing
-      courseId: id,
-      moduleId: newLesson.moduleId,
-      videoUrl: newLesson.content, // CONTENT ni VIDEOURL ga o'zgartiramiz
-      duration: parseInt(newLesson.duration) || 0,
-      order: parseInt(newLesson.order) || (lessons.filter(l => 
-        l.module === newLesson.moduleId || l.moduleId === newLesson.moduleId
-      ).length + 1),
-      isFree: false,
-      type: "video"
-    };
+    try {
+      const lessonData = {
+        title: newLesson.title,
+        description: "", // Agar kerak bo'lsa qo'shing
+        courseId: id,
+        moduleId: newLesson.moduleId,
+        videoUrl: newLesson.videoUrl, // ✅ To'g'ri field
+        duration: parseInt(newLesson.duration) || 0,
+        order: parseInt(newLesson.order) || (lessons.filter(l => 
+          l.module === newLesson.moduleId || l.moduleId === newLesson.moduleId
+        ).length + 1),
+        isFree: false,
+        type: "video"
+      };
 
-    console.log('📤 Dars maʼlumotlari:', lessonData);
+      console.log('📤 Dars maʼlumotlari:', lessonData);
 
-    const result = await apiRequest("/lessons", {
-      method: "POST",
-      body: lessonData,
-    });
+      const result = await apiRequest("/lessons", {
+        method: "POST",
+        body: lessonData,
+      });
 
-    console.log('✅ Dars qoshish natijasi:', result);
+      console.log('✅ Dars qoshish natijasi:', result);
 
-    alert("✅ Video dars muvaffaqiyatli qo'shildi!");
-    setNewLesson({
-      title: "",
-      content: "",
-      duration: 0,
-      order: 0,
-      moduleId: "",
-    });
+      alert("✅ Video dars muvaffaqiyatli qo'shildi!");
+      setNewLesson({
+        title: "",
+        videoUrl: "",
+        duration: 0,
+        order: 0,
+        moduleId: "",
+      });
 
-    // Yangilangan video darslarni yuklash
-    const lessonsData = await apiRequest(`/lessons/course/${id}`);
-    setLessons(lessonsData.data?.lessons || lessonsData.data || []);
+      // Yangilangan video darslarni yuklash
+      const lessonsData = await apiRequest(`/lessons/course/${id}`);
+      setLessons(lessonsData.data?.lessons || lessonsData.lessons || lessonsData.data || []);
 
-  } catch (error) {
-    console.error("Video dars qo'shishda xatolik:", error);
-    alert("Video dars qo'shishda xatolik yuz berdi: " + error.message);
-  }
-};
-
+    } catch (error) {
+      console.error("Video dars qo'shishda xatolik:", error);
+      alert("Video dars qo'shishda xatolik yuz berdi: " + error.message);
+    }
+  };
 
   // 💾 KURSNI YANGILASH
   const handleUpdateCourse = async (e) => {
@@ -599,7 +623,7 @@ const handleAddLesson = async (e) => {
       alert("✅ Modul muvaffaqiyatli o'chirildi!");
       
       const modulesData = await apiRequest(`/modules/course/${id}`);
-      setModules(modulesData.data?.modules || modulesData.modules || []);
+      setModules(modulesData.data?.modules || modulesData.modules || modulesData.data || []);
     } catch (error) {
       console.error("Modulni o'chirishda xatolik:", error);
       alert("Modulni o'chirishda xatolik yuz berdi: " + error.message);
@@ -614,7 +638,7 @@ const handleAddLesson = async (e) => {
       alert("✅ Video dars muvaffaqiyatli o'chirildi!");
       
       const lessonsData = await apiRequest(`/lessons/course/${id}`);
-      setLessons(lessonsData.data?.lessons || lessonsData.lessons || []);
+      setLessons(lessonsData.data?.lessons || lessonsData.lessons || lessonsData.data || []);
     } catch (error) {
       console.error("Video darsni o'chirishda xatolik:", error);
       alert("Video darsni o'chirishda xatolik yuz berdi: " + error.message);
@@ -1039,8 +1063,8 @@ const handleAddLesson = async (e) => {
 
                     {/* Video yuklash komponenti */}
                     <VideoUploader 
-                      onVideoUpload={(url) => setNewLesson({ ...newLesson, content: url })}
-                      currentVideoUrl={newLesson.content}
+                      onVideoUpload={(url) => setNewLesson({ ...newLesson, videoUrl: url })}
+                      currentVideoUrl={newLesson.videoUrl}
                     />
 
                     <ActionButton type="submit" variant="success" icon="➕">
@@ -1137,8 +1161,8 @@ const handleAddLesson = async (e) => {
                             {/* Video yuklash va ko'rish */}
                             <div className="mb-3">
                               <VideoUploader 
-                                onVideoUpload={(url) => handleUpdateLesson(lesson._id, "content", url)}
-                                currentVideoUrl={lesson.content}
+                                onVideoUpload={(url) => handleUpdateLesson(lesson._id, "videoUrl", url)}
+                                currentVideoUrl={lesson.videoUrl}
                               />
                             </div>
                             
@@ -1225,9 +1249,9 @@ const handleAddLesson = async (e) => {
                                       <span>{lesson.duration || 0} daqiqa</span>
                                       <span>#{lesson.order || 0}</span>
                                     </div>
-                                    {lesson.content && (
+                                    {lesson.videoUrl && (
                                       <div className="mt-2">
-                                        <VideoPreview videoUrl={lesson.content} />
+                                        <VideoPreview videoUrl={lesson.videoUrl} />
                                       </div>
                                     )}
                                   </div>
